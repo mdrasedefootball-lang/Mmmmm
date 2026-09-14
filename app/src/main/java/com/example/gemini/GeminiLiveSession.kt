@@ -43,8 +43,7 @@ class GeminiLiveSession(
     private var currentModelIndex = 0
     private val modelCandidates = listOf(
         Constants.PREFERRED_LIVE_MODEL,
-        Constants.FALLBACK_LIVE_MODEL,
-        "gemini-2.0-flash"
+        Constants.FALLBACK_LIVE_MODEL
     )
 
     private val okHttpClient = OkHttpClient.Builder()

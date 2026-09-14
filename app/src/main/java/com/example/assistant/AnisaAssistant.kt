@@ -1,8 +1,7 @@
 package com.example.assistant
 
 import android.content.Context
-import com.example.audio.AudioPlayer
-import com.example.audio.AudioRecorder
+import com.example.audio.AudioStreamer
 import com.example.gemini.GeminiConfig
 import com.example.gemini.GeminiLiveSession
 import com.example.tools.ToolManager
@@ -10,7 +9,6 @@ import com.example.tools.ToolResult
 import com.example.utils.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,8 +20,7 @@ class AnisaAssistant(
     private val scope: CoroutineScope
 ) {
 
-    private val audioPlayer = AudioPlayer(scope)
-    private val audioRecorder = AudioRecorder(context, scope)
+    private val audioStreamer = AudioStreamer(context, scope)
     private val toolManager = ToolManager(context)
     private val geminiSession = GeminiLiveSession(context, scope)
 
@@ -39,19 +36,22 @@ class AnisaAssistant(
     private val lastActionMessageInternal = MutableStateFlow<String?>(null)
     val lastActionMessage: StateFlow<String?> = lastActionMessageInternal.asStateFlow()
 
-    val micAmplitude: StateFlow<Float> = audioRecorder.inputAmplitude
-    val aiAmplitude: StateFlow<Float> = audioPlayer.outputAmplitude
+    val micAmplitude: StateFlow<Float> = audioStreamer.micAmplitude
+    val aiAmplitude: StateFlow<Float> = audioStreamer.playbackAmplitude
 
     init {
         setupSessionCallbacks()
         toolManager.onToolExecutedListener = { result: ToolResult ->
             lastActionMessageInternal.value = result.message
         }
-        audioPlayer.setOnPlaybackFinishedListener {
+        audioStreamer.onPlaybackFinished = {
             if (assistantStateInternal.value == AssistantState.SPEAKING) {
                 assistantStateInternal.value = AssistantState.LISTENING
-                audioRecorder.resumeRecording()
+                audioStreamer.resumeRecording()
             }
+        }
+        audioStreamer.onUserBargeIn = {
+            interruptAssistant()
         }
     }
 
@@ -71,8 +71,8 @@ class AnisaAssistant(
 
             override fun onDisconnected() {
                 isConnectedInternal.value = false
-                audioRecorder.stopRecording()
-                audioPlayer.stopSpeaking()
+                audioStreamer.stopRecording()
+                audioStreamer.stopPlayback()
                 if (assistantStateInternal.value != AssistantState.ERROR) {
                     assistantStateInternal.value = AssistantState.DISCONNECTED
                 }
@@ -82,21 +82,20 @@ class AnisaAssistant(
                 Logger.e("Assistant error: $message")
                 errorMessageInternal.value = message
                 assistantStateInternal.value = AssistantState.ERROR
-                audioRecorder.stopRecording()
-                audioPlayer.stopSpeaking()
+                audioStreamer.stopRecording()
+                audioStreamer.stopPlayback()
             }
 
             override fun onAudioReceived(pcmAudioChunk: ByteArray) {
                 if (assistantStateInternal.value != AssistantState.SPEAKING) {
                     assistantStateInternal.value = AssistantState.SPEAKING
                     // Pause mic or reduce input while AI speaks to prevent echo
-                    audioRecorder.pauseRecording()
+                    audioStreamer.pauseRecording()
                 }
-                audioPlayer.enqueueAudio(pcmAudioChunk)
+                audioStreamer.enqueueAudio(pcmAudioChunk)
             }
 
             override fun onTurnComplete() {
-                // AudioPlayer listener handles returning to LISTENING when buffered audio completes
                 Logger.d("Gemini turn completed")
             }
 
@@ -119,15 +118,7 @@ class AnisaAssistant(
     }
 
     private fun startMicrophoneStream() {
-        val success = audioRecorder.startRecording { chunk ->
-            // Check for user voice barge-in interruption while AI is speaking
-            if (assistantStateInternal.value == AssistantState.SPEAKING) {
-                val amp = audioRecorder.inputAmplitude.value
-                if (amp > 0.45f) {
-                    Logger.d("User voice interruption detected (amp: $amp)")
-                    interruptAssistant()
-                }
-            }
+        val success = audioStreamer.startRecording { chunk ->
             geminiSession.sendAudio(chunk)
         }
 
@@ -138,7 +129,7 @@ class AnisaAssistant(
     }
 
     fun startAssistant(apiKey: String) {
-        if (!audioRecorder.hasPermission()) {
+        if (!audioStreamer.hasRecordPermission()) {
             errorMessageInternal.value = "Microphone permission required."
             assistantStateInternal.value = AssistantState.ERROR
             return
@@ -149,17 +140,17 @@ class AnisaAssistant(
     }
 
     fun stopAssistant() {
-        audioRecorder.stopRecording()
-        audioPlayer.stopSpeaking()
+        audioStreamer.stopRecording()
+        audioStreamer.stopPlayback()
         geminiSession.disconnect()
         assistantStateInternal.value = AssistantState.DISCONNECTED
         isConnectedInternal.value = false
     }
 
     fun interruptAssistant() {
-        audioPlayer.stopSpeaking()
+        audioStreamer.interruptPlayback()
         geminiSession.interrupt()
-        audioRecorder.resumeRecording()
+        audioStreamer.resumeRecording()
         assistantStateInternal.value = AssistantState.LISTENING
         Logger.i("Assistant interrupted; switched to LISTENING")
     }
@@ -176,8 +167,7 @@ class AnisaAssistant(
     }
 
     fun release() {
-        audioRecorder.release()
-        audioPlayer.release()
+        audioStreamer.release()
         geminiSession.disconnect()
     }
 }

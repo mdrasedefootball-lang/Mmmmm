@@ -13,8 +13,8 @@ object Constants {
     const val SAMPLE_RATE_PLAYER = 24000
 
     // Models
-    const val PREFERRED_LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
-    const val FALLBACK_LIVE_MODEL = "gemini-2.0-flash-exp"
+    const val PREFERRED_LIVE_MODEL = "gemini-3.1-flash-live-preview"
+    const val FALLBACK_LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
     const val REST_MODEL = "gemini-3.5-flash"
 
     // Voice
