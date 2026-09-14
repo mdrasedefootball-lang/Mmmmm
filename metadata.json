@@ -1,0 +1,7 @@
+{
+  "name": "ANISA AI",
+  "description": "Futuristic voice-first personal AI assistant with real-time Gemini Live audio streaming and system actions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

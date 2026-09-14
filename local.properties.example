@@ -1,0 +1,10 @@
+## local.properties.example — ANISA AI Voice Assistant
+## Copy this file to local.properties or configure .env for API credentials.
+## NEVER commit production API keys or keystores into source control.
+
+# Gemini API Key (Required for Gemini Live Voice-to-Voice Streaming)
+# In AI Studio, configure this securely in the Secrets panel as GEMINI_API_KEY.
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Android SDK Path (Automatically managed by Android Studio / AI Studio)
+# sdk.dir=/Users/username/Library/Android/sdk
